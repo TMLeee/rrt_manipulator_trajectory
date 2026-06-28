@@ -18,9 +18,11 @@ public:
 
     // 창 종료 요청 여부
     bool shouldClose() const;
+    // 창 종료 요청 (예: main 에서 ESC 처리 시)
+    void requestClose();
 
-    // ESC 외 키가 한 번이라도 눌렸는지 (시작 트리거용, 래치)
-    bool keyPressed() const { return key_pressed_; }
+    // 키 폴링 — 키 처리 로직은 main 에서 수행 (GLFW 키 코드)
+    bool keyDown(int glfw_key) const;
 
     // 시뮬레이션 한 스텝의 전반부 / 후반부 (사이에 제어 입력 주입)
     void stepStart();
@@ -73,8 +75,7 @@ public:
     Eigen::MatrixXd jacobianSite(int site_id) const;
 
 private:
-    // GLFW 콜백 (window user pointer 로 인스턴스 접근)
-    static void keyboardCb(GLFWwindow* w, int key, int scancode, int act, int mods);
+    // GLFW 마우스 콜백 (window user pointer 로 인스턴스 접근). 키는 main 에서 폴링.
     static void mouseButtonCb(GLFWwindow* w, int button, int act, int mods);
     static void cursorPosCb(GLFWwindow* w, double xpos, double ypos);
     static void scrollCb(GLFWwindow* w, double xoffset, double yoffset);
@@ -93,7 +94,4 @@ private:
     // 마우스 카메라 조작 상태
     bool   btn_left_ = false, btn_middle_ = false, btn_right_ = false;
     double last_x_ = 0.0, last_y_ = 0.0;
-
-    // 키 입력 래치 (ESC 외 아무 키나 눌리면 true)
-    bool key_pressed_ = false;
 };

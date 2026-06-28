@@ -24,9 +24,8 @@ MujocoEnv::MujocoEnv(const std::string& model_path, int width, int height,
     glfwMakeContextCurrent(window_);
     glfwSwapInterval(1);  // vsync
 
-    // 콜백 등록 + 인스턴스 포인터 연결
+    // 마우스 콜백 등록 + 인스턴스 포인터 연결 (키는 main 에서 폴링)
     glfwSetWindowUserPointer(window_, this);
-    glfwSetKeyCallback(window_, keyboardCb);
     glfwSetMouseButtonCallback(window_, mouseButtonCb);
     glfwSetCursorPosCallback(window_, cursorPosCb);
     glfwSetScrollCallback(window_, scrollCb);
@@ -52,6 +51,14 @@ MujocoEnv::~MujocoEnv() {
 
 bool MujocoEnv::shouldClose() const {
     return glfwWindowShouldClose(window_);
+}
+
+void MujocoEnv::requestClose() {
+    glfwSetWindowShouldClose(window_, GLFW_TRUE);
+}
+
+bool MujocoEnv::keyDown(int glfw_key) const {
+    return glfwGetKey(window_, glfw_key) == GLFW_PRESS;
 }
 
 void MujocoEnv::stepStart() { mj_step1(m_, d_); }
@@ -154,15 +161,6 @@ Eigen::MatrixXd MujocoEnv::jacobianSite(int site_id) const {
     J.topRows(3)    = jacp;
     J.bottomRows(3) = jacr;
     return J;
-}
-
-void MujocoEnv::keyboardCb(GLFWwindow* w, int key, int /*scancode*/, int act, int /*mods*/) {
-    auto* self = static_cast<MujocoEnv*>(glfwGetWindowUserPointer(w));
-    if (act != GLFW_PRESS) return;
-    if (key == GLFW_KEY_ESCAPE)
-        glfwSetWindowShouldClose(w, GLFW_TRUE);  // ESC 로 창 종료
-    else
-        self->key_pressed_ = true;               // 그 외 키 → 시작 트리거
 }
 
 void MujocoEnv::mouseButtonCb(GLFWwindow* w, int /*button*/, int /*act*/, int /*mods*/) {

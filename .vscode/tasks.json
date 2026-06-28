@@ -10,10 +10,20 @@
 				"-fdiagnostics-color=always",
 				"-g",
 				"-O0",
-				"${workspaceFolder}/main.cpp",
-				"${workspaceFolder}/MujocoEnv.cpp",
+				"${workspaceFolder}/src/main.cpp",
+				"${workspaceFolder}/src/simulator/MujocoEnv.cpp",
+				"${workspaceFolder}/src/model/MujocoRobotModel.cpp",
+				"${workspaceFolder}/src/model/RbdlRobotModel.cpp",
+				"${workspaceFolder}/src/controller/Controller.cpp",
+				"${workspaceFolder}/src/controller/HierarchicalSolver.cpp",
+				"${workspaceFolder}/src/controller/FrameTask.cpp",
+				"${workspaceFolder}/src/controller/JointSpaceTask.cpp",
 				"-o",
 				"${workspaceFolder}/main",
+				"-I${workspaceFolder}/src/simulator",
+				"-I${workspaceFolder}/src/model",
+				"-I${workspaceFolder}/src/controller",
+				"-I${workspaceFolder}/src/util",
 				"-I/opt/mujoco/mujoco/include",
 				"-I/usr/local/include",
 				"-I/usr/include/eigen3",
@@ -40,20 +50,29 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"detail": "프로젝트 전체 빌드 (main.cpp -> ./main), MuJoCo + RBDL + GLFW 링크"
+			"detail": "프로젝트 전체 빌드 (src/main.cpp -> ./main), MuJoCo + RBDL + GLFW 링크"
 		},
 		{
-			"type": "cppbuild",
-			"label": "C/C++: g++ build active file",
+			"type": "shell",
+			"label": "build (test_clik)",
 			"command": "/usr/bin/g++",
 			"args": [
 				"-std=c++17",
 				"-fdiagnostics-color=always",
 				"-g",
-				"-O0",
-				"${file}",
+				"-O2",
+				"${workspaceFolder}/tests/test_clik.cpp",
+				"${workspaceFolder}/src/model/MujocoRobotModel.cpp",
+				"${workspaceFolder}/src/controller/Controller.cpp",
+				"${workspaceFolder}/src/controller/HierarchicalSolver.cpp",
+				"${workspaceFolder}/src/controller/FrameTask.cpp",
+				"${workspaceFolder}/src/controller/JointSpaceTask.cpp",
 				"-o",
-				"${fileDirname}/${fileBasenameNoExtension}",
+				"${workspaceFolder}/test_clik",
+				"-I${workspaceFolder}/src/simulator",
+				"-I${workspaceFolder}/src/model",
+				"-I${workspaceFolder}/src/controller",
+				"-I${workspaceFolder}/src/util",
 				"-I/opt/mujoco/mujoco/include",
 				"-I/usr/local/include",
 				"-I/usr/include/eigen3",
@@ -64,20 +83,17 @@
 				"-lmujoco",
 				"-lrbdl",
 				"-lrbdl_urdfreader",
-				"-lglfw",
-				"-lGLEW",
-				"-lGL",
 				"-ldl",
 				"-lpthread"
 			],
 			"options": {
-				"cwd": "${fileDirname}"
+				"cwd": "${workspaceFolder}"
 			},
 			"problemMatcher": [
 				"$gcc"
 			],
 			"group": "build",
-			"detail": "현재 열린 파일만 빌드 (compiler: /usr/bin/g++)"
+			"detail": "headless CLIK 수렴 테스트 빌드 (GLFW 불필요)"
 		}
 	]
 }

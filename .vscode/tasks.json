@@ -12,6 +12,12 @@
 				"-O0",
 				"${workspaceFolder}/main.cpp",
 				"${workspaceFolder}/MujocoEnv.cpp",
+				"${workspaceFolder}/MujocoRobotModel.cpp",
+				"${workspaceFolder}/RbdlRobotModel.cpp",
+				"${workspaceFolder}/Controller.cpp",
+				"${workspaceFolder}/HierarchicalSolver.cpp",
+				"${workspaceFolder}/FrameTask.cpp",
+				"${workspaceFolder}/JointSpaceTask.cpp",
 				"-o",
 				"${workspaceFolder}/main",
 				"-I/opt/mujoco/mujoco/include",
@@ -43,17 +49,22 @@
 			"detail": "프로젝트 전체 빌드 (main.cpp -> ./main), MuJoCo + RBDL + GLFW 링크"
 		},
 		{
-			"type": "cppbuild",
-			"label": "C/C++: g++ build active file",
+			"type": "shell",
+			"label": "build (test_clik)",
 			"command": "/usr/bin/g++",
 			"args": [
 				"-std=c++17",
 				"-fdiagnostics-color=always",
 				"-g",
-				"-O0",
-				"${file}",
+				"-O2",
+				"${workspaceFolder}/test_clik.cpp",
+				"${workspaceFolder}/MujocoRobotModel.cpp",
+				"${workspaceFolder}/Controller.cpp",
+				"${workspaceFolder}/HierarchicalSolver.cpp",
+				"${workspaceFolder}/FrameTask.cpp",
+				"${workspaceFolder}/JointSpaceTask.cpp",
 				"-o",
-				"${fileDirname}/${fileBasenameNoExtension}",
+				"${workspaceFolder}/test_clik",
 				"-I/opt/mujoco/mujoco/include",
 				"-I/usr/local/include",
 				"-I/usr/include/eigen3",
@@ -64,20 +75,17 @@
 				"-lmujoco",
 				"-lrbdl",
 				"-lrbdl_urdfreader",
-				"-lglfw",
-				"-lGLEW",
-				"-lGL",
 				"-ldl",
 				"-lpthread"
 			],
 			"options": {
-				"cwd": "${fileDirname}"
+				"cwd": "${workspaceFolder}"
 			},
 			"problemMatcher": [
 				"$gcc"
 			],
 			"group": "build",
-			"detail": "현재 열린 파일만 빌드 (compiler: /usr/bin/g++)"
+			"detail": "headless CLIK 수렴 테스트 빌드 (GLFW 불필요)"
 		}
 	]
 }

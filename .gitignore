@@ -1,0 +1,28 @@
+# --- MuJoCo 모델 (외부 git 저장소, 약 2.1GB) ---
+# mujoco_menagerie 는 DeepMind 의 별도 git repo 입니다.
+# 본 저장소에 직접 포함하지 않습니다. (필요 시 git submodule 로 관리 권장)
+model/
+
+# --- 빌드 폴더 / 산출물 ---
+build/
+main
+*.o
+*.obj
+*.out
+*.exe
+
+# --- 디버그/코어 ---
+core
+*.core
+vgcore.*
+
+# --- 에디터/OS ---
+*.swp
+*~
+.DS_Store
+
+# --- VS Code: 공유 설정은 추적, 개인 설정만 무시 ---
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json

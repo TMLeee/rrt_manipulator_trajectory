@@ -1,0 +1,82 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "build (main.cpp)",
+			"command": "/usr/bin/g++",
+			"args": [
+				"-std=c++17",
+				"-fdiagnostics-color=always",
+				"-g",
+				"-O0",
+				"${workspaceFolder}/main.cpp",
+				"-o",
+				"${workspaceFolder}/main",
+				"-I/opt/mujoco/mujoco/include",
+				"-I/usr/local/include",
+				"-I/usr/include/eigen3",
+				"-L/opt/mujoco/mujoco/lib",
+				"-L/usr/local/lib",
+				"-Wl,-rpath,/opt/mujoco/mujoco/lib",
+				"-Wl,-rpath,/usr/local/lib",
+				"-lmujoco",
+				"-lrbdl",
+				"-lrbdl_urdfreader",
+				"-lglfw",
+				"-lGLEW",
+				"-lGL",
+				"-ldl",
+				"-lpthread"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"detail": "프로젝트 전체 빌드 (main.cpp -> ./main), MuJoCo + RBDL + GLFW 링크"
+		},
+		{
+			"type": "cppbuild",
+			"label": "C/C++: g++ build active file",
+			"command": "/usr/bin/g++",
+			"args": [
+				"-std=c++17",
+				"-fdiagnostics-color=always",
+				"-g",
+				"-O0",
+				"${file}",
+				"-o",
+				"${fileDirname}/${fileBasenameNoExtension}",
+				"-I/opt/mujoco/mujoco/include",
+				"-I/usr/local/include",
+				"-I/usr/include/eigen3",
+				"-L/opt/mujoco/mujoco/lib",
+				"-L/usr/local/lib",
+				"-Wl,-rpath,/opt/mujoco/mujoco/lib",
+				"-Wl,-rpath,/usr/local/lib",
+				"-lmujoco",
+				"-lrbdl",
+				"-lrbdl_urdfreader",
+				"-lglfw",
+				"-lGLEW",
+				"-lGL",
+				"-ldl",
+				"-lpthread"
+			],
+			"options": {
+				"cwd": "${fileDirname}"
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build",
+			"detail": "현재 열린 파일만 빌드 (compiler: /usr/bin/g++)"
+		}
+	]
+}

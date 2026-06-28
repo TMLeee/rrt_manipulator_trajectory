@@ -15,7 +15,7 @@
                     "value": "/opt/mujoco/mujoco/lib:/usr/local/lib:${env:LD_LIBRARY_PATH}"
                 }
             ],
-            "externalConsole": false,
+            "externalConsole": true,
             "MIMode": "gdb",
             "miDebuggerPath": "/usr/bin/gdb",
             "preLaunchTask": "build (main.cpp)",

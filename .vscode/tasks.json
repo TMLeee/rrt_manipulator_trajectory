@@ -11,6 +11,7 @@
 				"-g",
 				"-O0",
 				"${workspaceFolder}/main.cpp",
+				"${workspaceFolder}/MujocoEnv.cpp",
 				"-o",
 				"${workspaceFolder}/main",
 				"-I/opt/mujoco/mujoco/include",

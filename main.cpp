@@ -1,23 +1,14 @@
 #include <iostream>
-#include <mujoco/mujoco.h>
-#include <GLFW/glfw3.h>
+#include <stdexcept>
 #include <rbdl/rbdl.h>
 #include <rbdl/addons/urdfreader/urdfreader.h>
 #include <Eigen/Dense>
 
+#include "MujocoEnv.h"
+
 using namespace std;
 using namespace RigidBodyDynamics;
 using namespace RigidBodyDynamics::Math;
-
-// 전역 MuJoCo 데이터
-mjModel* m = nullptr;
-mjData* d = nullptr;
-
-// 시각화용 구조체
-mjvCamera cam;
-mjvOption opt;
-mjvScene scn;
-mjrContext con;
 
 
 Quaternion RotationMatrxToQuaternion(Eigen::Matrix3d rot) {
@@ -91,144 +82,116 @@ Vector3d QuaternionToEulerAngle(Quaternion &q)
 }
 
 
-// 콜백: 키보드 입력 처리
-void keyboard(GLFWwindow* window, int key, int scancode, int act, int mods)
-{
-    if (act == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
-    {
-        glfwSetWindowShouldClose(window, GLFW_TRUE);
-    }
-}
-
-// 콜백: 마우스 & 휠
-void mouse_button(GLFWwindow* window, int button, int act, int mods)
-{
-    // 여기에 카메라 제어 로직 추가 가능 (간단 예제라 생략)
-}
-
-void scroll(GLFWwindow* window, double xoffset, double yoffset)
-{
-    // 카메라 줌인/아웃 등 (생략 가능)
-}
-
-uint32_t guiEnRot;
 int main(void)
 {
-    // ------------------------
-    // 1. MuJoCo 초기화
-    // ------------------------
-    char error[1024] = {0};
-
-    // 모델 로드 (경로는 실행 위치 기준)
     const char* model_path = "/home/user1/mani_ws/model/mujoco_menagerie/franka_emika_panda/scene.xml";
-    m = mj_loadXML(model_path, nullptr, error, sizeof(error));
-    if (!m)
+
+    // MuJoCo 환경 생성
+    MujocoEnv env(model_path, 1200, 900, "MuJoCo Viewer (C++ from VS Code)");
+    env.setCamera(120.0, -15.0, 3.0, 0.5, 0.0, 0.5);
+
+    std::cout << "timestep = " << env.timestep() << std::endl;
+    std::cout << "nq=" << env.nq() << " nv=" << env.nv() << " nu=" << env.nu() << std::endl;
+
+    // 엔드이펙터 body id (없으면 마지막 body 로 대체)
+    int ee_id = env.bodyId("hand");
+    if (ee_id < 0) ee_id = env.model()->nbody - 1;
+
+    // IK 파라미터 (Damped Least-Squares + task-space PID)
+    const int    ARM    = 7;                 // 팔 자유도 (앞 7개)
+    const double dt     = env.timestep();    // 적분 간격
+    const double lambda = 0.03;              // DLS 댐핑 계수
+    const double Kp_p = 3.0, Kp_o = 3.0;     // P: 위치 / 자세 오차 게인
+    const double Kd_p = 0.1, Kd_o = 0.05;    // D: 위치 / 자세 속도 오차 게인
+    const double Ki_p = 0.0, Ki_o = 0.0;     // I: 위치 / 자세 오차 적분 게인 (우선 0)
+
+    // ===== 초기 자세: joint4 = -1.57, joint6 = 1.57 로 설정 후 안정화 =====
     {
-        std::printf("MuJoCo load error: %s\n", error);
-        return 1;
+        Eigen::VectorXd q0 = env.qpos();   // 기본 초기 관절각 (nq)
+        q0[3] = -1.57;                     // joint4
+        q0[5] =  1.57;                     // joint6
+        env.setQpos(q0);
+        env.forward();
+        // 위치 서보가 이 자세를 유지하도록 ctrl 도 초기각으로 설정
+        Eigen::VectorXd u0 = env.ctrl();
+        u0.head(ARM) = q0.head(ARM);
+        env.setCtrl(u0);
     }
+    env.step(1000);  // 안정화
 
-    d = mj_makeData(m);
+    // 목표 자세: 위치는 절대좌표 (0.5, 0, 0.5), 자세는 초기 EE 자세 유지
+    Eigen::Vector3d p_des(0.5, 0.0, 0.5);
+    Eigen::Matrix3d R_des = env.bodyMat(ee_id);
 
-    // ------------------------
-    // 2. GLFW / OpenGL 초기화
-    // ------------------------
-    if (!glfwInit())
-    {
-        std::printf("Could not initialize GLFW\n");
-        return 1;
+    // CLIK 목표 관절각 초기화 = 현재 팔 관절각
+    Eigen::VectorXd q_des = env.qpos().head(ARM);
+    Eigen::VectorXd e_int = Eigen::VectorXd::Zero(6);  // 위치/자세 오차 적분항
+
+    bool control_started = false;   // 키 입력 전엔 초기 자세 유지
+    long step_count = 0;
+    std::cout << "[준비됨] 무조코 창에서 아무 키나 누르면 목표 위치로 제어를 시작합니다." << std::endl;
+
+    // 메인 루프
+    while (!env.shouldClose()) {
+        env.stepStart();
+
+        // 키 입력을 받으면 제어 시작 (래치)
+        if (!control_started && env.keyPressed()) {
+            control_started = true;
+            std::cout << "[시작] 목표 위치로 제어 시작." << std::endl;
+        }
+
+        if (control_started) {
+            // ---- FK: 현재 EE 위치/자세 ----
+            Eigen::Vector3d p_cur = env.bodyPos(ee_id);
+            Eigen::Matrix3d R_cur = env.bodyMat(ee_id);
+
+            // ---- 로그: 목표 / 현재 위치 (500 스텝마다) ----
+            if (step_count % 500 == 0) {
+                std::printf("target=(%.4f, %.4f, %.4f)  current=(%.4f, %.4f, %.4f)  err=%.4f\n",
+                            p_des.x(), p_des.y(), p_des.z(),
+                            p_cur.x(), p_cur.y(), p_cur.z(), (p_des - p_cur).norm());
+            }
+            ++step_count;
+
+            // ---- 위치 오차 + 자세 오차(쿼터니언 → 오일러각) ----
+            Quaternion q_cur = RotationMatrxToQuaternion(R_cur);
+            Quaternion q_tar = RotationMatrxToQuaternion(R_des);
+            Quaternion q_err = q_tar * q_cur.conjugate();       // 현재→목표 회전
+            Vector3d   ori_err = QuaternionToEulerAngle(q_err); // 각도 오차
+
+            Eigen::VectorXd e(6);
+            e.head(3) = p_des - p_cur;   // 위치 오차
+            e.tail(3) = ori_err;         // 자세 오차
+
+            // ---- 자코비안 + 속도 오차 (목표 EE 속도 0 → ė = -(J·q̇)) ----
+            Eigen::MatrixXd J = env.jacobianBody(ee_id).leftCols(ARM);  // 6 x 7
+            Eigen::VectorXd e_dot = -(J * env.qvel().head(ARM));        // 6
+
+            // ---- 위치/자세 오차 적분 누적 ----
+            e_int += e * dt;
+
+            // ---- task-space PID: u = Kp·e + Kd·ė + Ki·∫e (자세항은 우선 off) ----
+            Eigen::VectorXd u(6);
+            u.setZero();
+            u.head(3) = Kp_p * e.head(3) + Kd_p * e_dot.head(3) + Ki_p * e_int.head(3);
+            // u.tail(3) = Kp_o * e.tail(3) + Kd_o * e_dot.tail(3) + Ki_o * e_int.tail(3);
+
+            // ---- DLS: dq = Jᵀ(JJᵀ + λ²I)⁻¹·u → 목표 관절각 적분 ----
+            Eigen::MatrixXd A = J * J.transpose() + lambda * lambda * Eigen::MatrixXd::Identity(6, 6);
+            Eigen::VectorXd dq = J.transpose() * A.ldlt().solve(u);  // 7
+            q_des += dq * dt;
+
+            // ---- 제어 입력 주입 (위치 액추에이터: ctrl = 목표각, 그리퍼는 유지) ----
+            Eigen::VectorXd ctrl = env.ctrl();
+            ctrl.head(ARM) = q_des;
+            env.setCtrl(ctrl);
+        }
+        // control_started 이전: 별도 명령 없음 → 위치 서보가 초기 자세 유지
+
+        env.stepEnd();
+        env.render();
     }
-
-    // OpenGL context 생성
-    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
-    GLFWwindow* window = glfwCreateWindow(1200, 900, "MuJoCo Viewer (C++ from VS Code)", nullptr, nullptr);
-    if (!window)
-    {
-        std::printf("Could not create GLFW window\n");
-        glfwTerminate();
-        return 1;
-    }
-
-    glfwMakeContextCurrent(window);
-    glfwSwapInterval(1);  // vsync
-
-    // 콜백 등록
-    glfwSetKeyCallback(window, keyboard);
-    glfwSetMouseButtonCallback(window, mouse_button);
-    glfwSetScrollCallback(window, scroll);
-
-    // ------------------------
-    // 3. MuJoCo 시각화 초기화
-    // ------------------------
-    // 기본 카메라, 옵션
-    mjv_defaultCamera(&cam);
-    mjv_defaultOption(&opt);
-    mjv_defaultScene(&scn);
-    mjr_defaultContext(&con);
-
-    // scene 메모리 할당
-    mjv_makeScene(m, &scn, 2000);
-    // OpenGL context와 연결
-    mjr_makeContext(m, &con, mjFONTSCALE_150);
-
-    // 카메라를 모델에 맞게 초기화
-    cam.azimuth = 120.0f;
-    cam.elevation = -15.0f;
-    cam.distance = 3.0f;
-    cam.lookat[0] = 0.5f;
-    cam.lookat[1] = 0.0f;
-    cam.lookat[2] = 0.5f;
-
-    std::cout << "timestep = " << m->opt.timestep << std::endl;
-
-    // Simulation 1
-    for(uint32_t i=0; i<1000; ++i) {
-        mj_step1(m, d);
-        mj_step2(m, d);
-    }
-
-    // ------------------------
-    // 4. 메인 루프
-    // ------------------------
-    while (!glfwWindowShouldClose(window)) {   
-
-        // Simulation 1
-        mj_step1(m, d);
-        
-        // Calculate FK //
-
-        // Calculate IK //
-
-        // Simulation 2
-        mj_step2(m, d);
-
-        // 윈도우 크기 확인
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
-
-        // viewport 설정
-        mjrRect viewport = {0, 0, width, height};
-
-        // 장면 업데이트 (카메라, 조명, 지오메트리 등)
-        mjv_updateScene(m, d, &opt, nullptr, &cam, mjCAT_ALL, &scn);
-
-        // 화면 지우고 렌더링
-        mjr_render(viewport, &scn, &con);
-
-        // 버퍼 스왑 & 이벤트 처리
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-
-    // ------------------------
-    // 5. 정리(clean up)
-    // ------------------------
-    mj_deleteData(d);
-    mj_deleteModel(m);
-    mjv_freeScene(&scn);
-    mjr_freeContext(&con);
-    glfwDestroyWindow(window);
-    glfwTerminate();
 
     return 0;
 }

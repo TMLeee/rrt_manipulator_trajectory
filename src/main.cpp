@@ -46,34 +46,54 @@ int main(void)
 
     ClikController controller(model, /*lambda=*/0.03);
 
-    // 우선순위 0: EE 위치 task (위치전용 마스크), PID(Ki=0)
+    // 우선순위 0: EE 위치+자세 task (full pose), PID(Ki=0). 자세는 초기 자세 유지(1/2/3 공통)
     auto ee_task = std::make_shared<FrameTask>(
         "ee_pose", ee,
         std::make_unique<PIDControlLaw>(/*Kp=*/3.0, /*Kd=*/0.1, /*Ki=*/0.0),
-        std::array<bool, 6>{true, true, true, false, false, false});
+        std::array<bool, 6>{true, true, true, true, true, true});
     ee_task->setTargetPos(Eigen::Vector3d(0.5, 0.0, 0.5));
-    ee_task->setTargetRot(R_des);
+    ee_task->setTargetRot(R_des);   // 초기 위치의 자세값 (모든 목표 공통)
     controller.addTask(ee_task);
 
-    // 우선순위 1 (null-space): 자세(posture) 유지 — 초기 팔 관절각으로 정규화
-    Eigen::VectorXd q_arm0 = env.qpos().head(ARM);
-    std::vector<int> all_arm = {0, 1, 2, 3, 4, 5, 6};
-    auto posture = std::make_shared<JointSpaceTask>(
-        "posture", std::make_unique<PControlLaw>(0.5), all_arm, q_arm0);
-    controller.addTask(posture);
+    // 우선순위 1 (null-space): 3번 축(joint3, index 2) → 0도
+    auto j3_task = std::make_shared<JointSpaceTask>(
+        "joint3_zero", std::make_unique<PControlLaw>(0.5),
+        std::vector<int>{2}, Eigen::VectorXd::Constant(1, 0.0));
+    controller.addTask(j3_task);
 
+    // 숫자키 → 목표 위치 매핑
+    const Eigen::Vector3d TARGETS[3] = {
+        {0.5,  0.0, 0.5},   // 1
+        {0.5,  0.3, 0.5},   // 2
+        {0.5, -0.3, 0.5},   // 3
+    };
+    Eigen::Vector3d target = TARGETS[0];   // 현재 목표 (기본값)
     bool control_started = false;
+    bool prev1 = false, prev2 = false, prev3 = false;  // 엣지 검출용
     long step_count = 0;
-    std::cout << "[준비됨] 무조코 창에서 아무 키나 누르면 목표 위치로 제어를 시작합니다." << std::endl;
+    std::cout << "[준비됨] 숫자키로 목표 지정 (ESC 종료):\n"
+              << "  1: (0.5, 0, 0.5)   2: (0.5, 0.3, 0.5)   3: (0.5, -0.3, 0.5)" << std::endl;
 
     // 메인 루프
     while (!env.shouldClose()) {
         env.stepStart();
 
-        if (!control_started && env.keyPressed()) {
-            control_started = true;
-            controller.start();
-            std::cout << "[시작] 목표 위치로 제어 시작." << std::endl;
+        // ---- 키 처리 (main 에서 폴링 + 엣지검출) ----
+        if (env.keyDown(GLFW_KEY_ESCAPE)) env.requestClose();
+        bool k1 = env.keyDown(GLFW_KEY_1) || env.keyDown(GLFW_KEY_KP_1);
+        bool k2 = env.keyDown(GLFW_KEY_2) || env.keyDown(GLFW_KEY_KP_2);
+        bool k3 = env.keyDown(GLFW_KEY_3) || env.keyDown(GLFW_KEY_KP_3);
+        int picked = 0;
+        if (k1 && !prev1) picked = 1;
+        else if (k2 && !prev2) picked = 2;
+        else if (k3 && !prev3) picked = 3;
+        prev1 = k1; prev2 = k2; prev3 = k3;
+
+        if (picked) {
+            target = TARGETS[picked - 1];
+            ee_task->setTargetPos(target);
+            if (!control_started) { control_started = true; controller.start(); }
+            std::printf("[목표 %d] (%.3f, %.3f, %.3f)\n", picked, target.x(), target.y(), target.z());
         }
 
         if (control_started) {
@@ -84,9 +104,8 @@ int main(void)
 
             if (step_count % 500 == 0) {
                 Eigen::Vector3d p = model->framePos(ee);
-                Eigen::Vector3d p_des(0.5, 0.0, 0.5);
                 std::printf("target=(%.4f, %.4f, %.4f)  current=(%.4f, %.4f, %.4f)  err=%.4f\n",
-                            p_des.x(), p_des.y(), p_des.z(), p.x(), p.y(), p.z(), (p_des - p).norm());
+                            target.x(), target.y(), target.z(), p.x(), p.y(), p.z(), (target - p).norm());
             }
             ++step_count;
         }
